@@ -3,13 +3,14 @@ package test
 import java.util.Calendar
 import java.util.concurrent.{TimeUnit, Executors}
 
+import org.apache.spark.SparkContext
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.{functions, Column, Row, SQLContext}
-
+import org.apache.spark.mllib.linalg.Vector
 /**
  * Created by sbelur on 10/01/16.
  */
-class Scheduler(val sqlc:SQLContext) extends Serializable{
+class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[String,Int]) extends Serializable{
 
 
 
@@ -32,15 +33,11 @@ class Scheduler(val sqlc:SQLContext) extends Serializable{
             .option("password", "mysql").load()
           println("*********** " + f)
           sqlc.udf.register("truncMin", new TruncMinFn())
-          //val col:Column = dataframe_mysql.col("insertedtime")
-          //functions.udf
           val testrdd: RDD[Row] = dataframe_mysql.where("truncMin(insertedtime)").rdd
-          println("SIZEDB" + testrdd.collect().size)
-          testrdd.collect().foreach(x => println("RecordFound " + x))
-          //val r = dataframe_mysql.sqlContext.sql(" select * from testdata where truncMin(insertedtime);").rdd
-          //println("SIZEDB2" + r.collect().size)
+          val parseFunction = AnomalyDetector.buildCategoricalAndLabelFunction(testrdd,protocols)
+          val originalAndData = testrdd.map(line => (line, parseFunction(line)))
 
-          //r.collect().foreach(x => println("Record2 " + x))
+          AnomalyDetector.anomalies(originalAndData,sqlc,detector)
         }
         catch {
           case e:Throwable => {
@@ -50,7 +47,7 @@ class Scheduler(val sqlc:SQLContext) extends Serializable{
           }
         }
       }
-    },0,1,TimeUnit.SECONDS)
+    },0,1,TimeUnit.MINUTES)
 
 
     class TruncMinFn extends Function1[java.sql.Timestamp,Boolean] with Serializable{

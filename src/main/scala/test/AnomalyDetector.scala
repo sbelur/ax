@@ -153,9 +153,25 @@ object AnomalyDetector {
       .option("password", "mysql").load()
     val rdd:RDD[Row] = dataframe_mysql.rdd;//filter("filesize < 50 or (filesize > 1000 and filesize < 1100)").rdd
     //val splits = rdd.randomSplit(Array(0.7,0.3))
-    anomalies(rdd,sqlcontext,sc)
+    val tuple = setupAnomalies(rdd,sc)
+    new Scheduler(sqlcontext,tuple._2,tuple._3).schedule()
+    anomalies(tuple._1,sqlcontext,tuple._2)
     //processRows(rdd,sc)
   }
+
+
+  def setupAnomalies(allRawData:RDD[Row],sc:SparkContext) = {
+    val rawData = allRawData
+    val protocols = rawData.map(r => r.getAs[String]("protocol")).distinct().collect().zipWithIndex.toMap
+    println("protocols "+protocols)
+    val parseFunction = buildCategoricalAndLabelFunction(rawData,protocols)
+    val originalAndData = rawData.map(line => (line, parseFunction(line)))
+    val data = originalAndData.values
+    val normalizeFunction = buildNormalizationFunction(data)
+    val anomalyDetector = buildAnomalyDetector(data, normalizeFunction,sc)
+    (originalAndData,anomalyDetector,protocols)
+  }
+
 
   class Customordering[T <: (Double,Vector)] extends Ordering[T]{
     def compare(x: T, y: T): Int = {
@@ -231,38 +247,43 @@ object AnomalyDetector {
     }
   }
 
-  def anomalies(allRawData: RDD[Row],sqlc : SQLContext,sc:SparkContext) = {
+  def anomalies(originalAndData: RDD[(Row,Vector)],sqlc : SQLContext, detector:Vector => Boolean) = {
     //val splits = allRawData.randomSplit(Array(0.7,0.3))
     //println("********** "+splits.size + " , "+splits(0).collect().size + " , "+splits(1).collect().size)
-   val rawData = allRawData
+ /*  val rawData = allRawData
     val protocols = rawData.map(r => r.getAs[String]("protocol")).distinct().collect().zipWithIndex.toMap
     println("protocols "+protocols)
     val parseFunction = buildCategoricalAndLabelFunction(rawData,protocols)
     val originalAndData = rawData.map(line => (line, parseFunction(line)))
     val data = originalAndData.values
     val normalizeFunction = buildNormalizationFunction(data)
-    val anomalyDetector = buildAnomalyDetector(data, normalizeFunction,sc)
+    val anomalyDetector = buildAnomalyDetector(data, normalizeFunction,sc)*/
 
-    new Scheduler(sqlc).schedule()
 
-  /* val dataframe_mysql = sqlc.read.format("jdbc")
+    /* val dataframe_mysql = sqlc.read.format("jdbc")
       .option("url", "jdbc:mysql://localhost:3306/ax")
       .option("driver", "com.mysql.jdbc.Driver")
       .option("dbtable","testdata")
       .option("user", "root")
       .option("password", "mysql").load()
     val testrdd:RDD[Row] = dataframe_mysql.rdd*/
-    val testrdd = originalAndData
     //println("********* testdata size "+testrdd.collect().size)
     //val testdata = testrdd.map(line => (line, parseFunction(line)))
-    val anomalies = testrdd.filter {
+    val anomalies = originalAndData.filter {
       case (orig,datum) => {
         val string = datum.toString
-        val b = anomalyDetector(datum)
+        val b = detector(datum)
         //println(datum + " => "+b)
         b
       }
     }
-    anomalies.collect.foreach(println)
+    println("******** ANOMALIES ************")
+    val allkeys: Array[Row] = anomalies.keys.collect
+    if(allkeys.isEmpty){
+      println("******** NO ANOMALIES!!! ************")
+    }
+    allkeys.foreach(e => println("ANOMALY => "+e))
+
+    Thread.sleep(2000)
   }
 }

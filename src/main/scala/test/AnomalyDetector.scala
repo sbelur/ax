@@ -60,7 +60,7 @@ object AnomalyDetector {
     math.sqrt(a.toArray.zip(b.toArray).map(p => p._1 - p._2).map(d => d * d).sum)
 
   def distToCentroid(datum: Vector, model: KMeansModel,mapping:collection.mutable.Map[Int,ListBuffer[Double]]) = {
-    //println("in distToCentroid "+mapping)
+    println("in distToCentroid "+datum)
     val cluster = model.predict(datum)
     val centroid = model.clusterCenters(cluster)
     val d = distance(centroid, datum)
@@ -86,10 +86,12 @@ object AnomalyDetector {
       //println(str)
       val line = str
       val buffer = line.split(',').toBuffer
+      buffer.remove(buffer.length-1)
       val protocol = buffer.remove(0)
       buffer.remove(0)
       buffer.remove(0)
-      //println("bufffer "+buffer)
+
+      println("bufffer "+buffer)
       val vector = buffer.map(_.toDouble)
 
       val newProtocolFeatures = new Array[Double](protocols.size)
@@ -234,13 +236,14 @@ object AnomalyDetector {
     //println("********** "+splits.size + " , "+splits(0).collect().size + " , "+splits(1).collect().size)
    val rawData = allRawData
     val protocols = rawData.map(r => r.getAs[String]("protocol")).distinct().collect().zipWithIndex.toMap
+    println("protocols "+protocols)
     val parseFunction = buildCategoricalAndLabelFunction(rawData,protocols)
     val originalAndData = rawData.map(line => (line, parseFunction(line)))
     val data = originalAndData.values
     val normalizeFunction = buildNormalizationFunction(data)
     val anomalyDetector = buildAnomalyDetector(data, normalizeFunction,sc)
 
-
+    new Scheduler(sqlc).schedule()
 
   /* val dataframe_mysql = sqlc.read.format("jdbc")
       .option("url", "jdbc:mysql://localhost:3306/ax")

@@ -23,20 +23,17 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
     reader.scheduleAtFixedRate(new Runnable() {
       override def run(): Unit = {
         try {
-          val f = "insertedtime >= (CONVERT(DATE_FORMAT(now(),'%Y-%m-%d-%H:%i:00'),DATETIME) - interval 1 minute) " +
-            "and insertedtime < (CONVERT(DATE_FORMAT(now(),'%Y-%m-%d-%H:%i:00'),DATETIME))"
           val dataframe_mysql = sqlc.read.format("jdbc")
             .option("url", "jdbc:mysql://localhost:3306/ax")
             .option("driver", "com.mysql.jdbc.Driver")
-            .option("dbtable", "testdata")
+            .option("dbtable", "VLTransfers")
             .option("user", "root")
             .option("password", "mysql").load()
-          println("*********** " + f)
           sqlc.udf.register("truncMin", new TruncMinFn())
-          val testrdd: RDD[Row] = dataframe_mysql.where("truncMin(insertedtime)").rdd
+          val testrdd: RDD[Row] = dataframe_mysql.where("truncMin(InsertedTime)").where("Direction = 'send'").rdd
           val parseFunction = AnomalyDetector.buildCategoricalAndLabelFunction(testrdd,protocols)
           val originalAndData = testrdd.map(line => (line, parseFunction(line)))
-
+          println("Checking anomalies in "+originalAndData.collect().size + " records")
           AnomalyDetector.anomalies(originalAndData,sqlc,detector)
         }
         catch {
@@ -61,9 +58,11 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
       val c = Calendar.getInstance();
       c.set(Calendar.SECOND,0)
       c.set(Calendar.MILLISECOND,0)
-      val end = c.getTime.getTime
-      c.set(Calendar.MINUTE,c.get(Calendar.MINUTE)-1)
+      c.set(Calendar.MINUTE,c.get(Calendar.MINUTE)-2)
       val start = c.getTime.getTime
+      c.set(Calendar.MINUTE,c.get(Calendar.MINUTE)+1)
+      val end = c.getTime.getTime
+      //println("*** timerange "+start + " ~ "+end)
       date.getTime >= start && date.getTime < end
     }
 

@@ -50,7 +50,21 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
             .option("password", "mysql").load()
           sqlc.udf.register("truncMin", new TruncMinFn())
           current = Calendar.getInstance()
-          val testrdd: RDD[Row] = dataframe_mysql.where("truncMin(InsertedTime)").where("Direction = 'send'").rdd
+          val testrdd: RDD[Row] = dataframe_mysql.where("truncMin(InsertedTime)")
+            .where("Direction = 'send'")
+            .rdd
+            .filter(r => {
+            var str = r.toString()
+            str = str.replace("[", "")
+            str = str.replace("]", "")
+            val line = str
+            val buffer = line.split(',').toBuffer
+            //println("buffer18 "+buffer(18) + " => "+buffer)
+            if(buffer(18).equals("null")){
+              println("null row "+r.toString())
+            }
+            !buffer(18).equals("null")
+          })
           val parseFunction = AnomalyDetector.buildCategoricalAndLabelFunction(testrdd,protocols)
           val originalAndData = testrdd.map(line => (line, parseFunction(line)))
           println("Checking anomalies in "+originalAndData.collect().size + " records")

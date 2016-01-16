@@ -1,10 +1,11 @@
 package test
 
+import java.net.InetSocketAddress
 import java.sql.{Timestamp, DriverManager}
 import org.apache.spark.SparkContext
 import org.apache.spark.SparkContext._
 import org.elasticsearch.client.transport.TransportClient
-import org.elasticsearch.common.settings.ImmutableSettings
+import org.elasticsearch.common.settings.{Settings}
 import org.elasticsearch.common.transport.InetSocketTransportAddress
 
 import org.elasticsearch.node.NodeBuilder._
@@ -54,13 +55,14 @@ object Utils {
     if(esclient.isDefined)
       esclient
     else {
-      val settingsbuilder = ImmutableSettings.settingsBuilder()
+      val settings = Settings.settingsBuilder()
         .put("http.port", 9600)
         .put("transport.tcp.port", 9700)
-        .put("cluster.name", "ax")
+        .put("cluster.name", "ax").build()
 
-      val transportClient = new TransportClient(settingsbuilder).addTransportAddress(
-        new InetSocketTransportAddress("localhost", 9700))
+      val transportClient = TransportClient.builder().settings(settings).build()
+        .addTransportAddress(new InetSocketTransportAddress(new InetSocketAddress("localhost", 9700)));
+
       println("transportClient.connectedNodes()" + transportClient.connectedNodes())
       esclient = Some(transportClient)
       esclient

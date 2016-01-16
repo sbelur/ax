@@ -39,7 +39,7 @@ object AnomalyDetector {
 
 
 
-   val loaded = KMeansModel.load(sc, "/Users/sbelur/work/axanomalymodel")
+    val loaded = KMeansModel.load(sc, "/Users/sbelur/work/axanomalymodel")
     //println(loaded)
 
     var oos = new ObjectOutputStream(new FileOutputStream("/Users/sbelur/work/axclustermapping"))
@@ -72,7 +72,7 @@ object AnomalyDetector {
     val kmeans = new KMeans()
     kmeans.setK(k)
     kmeans.setRuns(10)
-    kmeans.setEpsilon(0.0001)
+    kmeans.setEpsilon(0.000001)
     val model = kmeans.run(data)
     //println("******clustercost "+k + " => "+model.computeCost(data))
     cost(k) = model.computeCost(data)
@@ -134,9 +134,17 @@ object AnomalyDetector {
       buffer.remove(3)
       var protocol = buffer.remove(0)
 
-      //println("************ "+buffer)
+      println("************ "+buffer + " row "+r.toString())
       val vector = buffer.map(_.toDouble)
-
+      /*x => {
+        try {
+          x.toDouble
+        }
+        catch {
+          case e => 0
+        }
+      })
+*/
       val newProtocolFeatures = new Array[Double](protocols.size)
       newProtocolFeatures(protocols(protocol)) = 1.0
 
@@ -174,7 +182,7 @@ object AnomalyDetector {
     val means: Array[Double] = sums.map(_ / n)
     normalized("mean") = means
     normalized("stdev") = stdevs
-    println("got normalized "+normalized)
+    println("got normalized " + normalized)
     normalizer
   }
 
@@ -196,16 +204,23 @@ object AnomalyDetector {
       .setMaster("local[*]")
       .setAppName("AnomalyApp")
       .setJars(Array("/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/mysql-connector-java-5.1.34.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-core-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/elasticsearch-1.6.0.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-analyzers-common-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-queries-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-join-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-queryparser-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-sandbox-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-highlighter-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-memory-4.10.4.jar",
-      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-suggest-4.10.4.jar"))
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-core-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/elasticsearch-2.1.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-analyzers-common-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-queries-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-join-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-queryparser-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-sandbox-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-highlighter-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-memory-5.3.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/guava-18.0.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/jsr166e-1.1.0.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/t-digest-3.0.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/hppc-0.7.1.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/jackson-dataformat-smile-2.6.2.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/jackson-core-2.6.2.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/jackson-dataformat-yaml-2.6.2.jar",
+      "/Users/sbelur/work/spark-1.5.2-bin-hadoop2.6/lib/lucene-suggest-5.3.1.jar"))
 
     println("**************************" + conf)
 
@@ -222,7 +237,7 @@ object AnomalyDetector {
     val tuple = setupAnomalies(rdd, sc)
     new Scheduler(sqlcontext, tuple._1, tuple._2).schedule()
     //anomalies(tuple._1, sqlcontext, tuple._2)
-    //processRows(rdd,sc)
+    //processRows(rdd, sc)
   }
 
 
@@ -264,6 +279,7 @@ object AnomalyDetector {
         val first10 = y.sortWith((x: Double, y: Double) => x < y).take(10)
 
         println("***** Points in cluster " + x + " are " + top10 + " and least " + first10 + " with size " + y.size)
+        Thread.sleep(1000)
       }
       case y => println(y)
     })
@@ -311,10 +327,8 @@ object AnomalyDetector {
         var ndatum = normalizer(datum)
         val string = ndatum.toString
         val b = detector(ndatum)
-        //println(datum + " => "+b)
-        if(!b){
-          println("********* NOT AN ANOMALy "+datum + " => "+b)
-          Thread.sleep(1000)
+        if (!b) {
+          println("********* NOT AN ANOMALy " + datum + " => " + b)
         }
         b
       }
@@ -324,18 +338,19 @@ object AnomalyDetector {
     if (allkeys.isEmpty) {
       println("******** NO ANOMALIES!!! ************NO ANOMALIES!!!")
     }
-    if(allkeys.size > 0) {
+    if (allkeys.size > 0) {
       println("************* total found " + allkeys.size)
       val dataToStore = collection.mutable.Map[String, Any]()
       allkeys.foreach(e => {
         dataToStore("protocol") = e.get(8)
         dataToStore("filesize") = e.get(17)
         dataToStore("transfetime") = e.get(18)
+        dataToStore("insertedtime") = e.get(36)
         println("\n\n***** ANOMALY => (" + e.get(8) + "," + e.get(17) + "," + e.get(18) + ")")
         Thread.sleep(1000)
       })
       Utils.saveToES(dataToStore, sc)
-      Thread.sleep(2000)
+      //Thread.sleep(2000)
       println("****************************************")
     }
 

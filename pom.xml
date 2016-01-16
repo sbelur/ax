@@ -124,7 +124,12 @@
             <version>2.10.0</version>
             <scope>provided</scope>
         </dependency>
-
+        <dependency>
+            <groupId>org.elasticsearch</groupId>
+            <artifactId>elasticsearch</artifactId>
+            <version>1.6.0</version>
+            <scope>provided</scope>
+        </dependency>
     </dependencies>
     <properties>
         <java.version>1.8</java.version>
@@ -278,6 +283,7 @@
                             <descriptorRef>jar-with-dependencies</descriptorRef>
                         </descriptorRefs>
                     </configuration>
+
                     <executions>
                         <execution>
                             <id>make-assembly</id>
@@ -287,6 +293,7 @@
                             </goals>
                         </execution>
                     </executions>
+
                 </plugin>
 
             </plugins>

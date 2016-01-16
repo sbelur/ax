@@ -1,5 +1,6 @@
 package test
 
+import java.sql.Timestamp
 import java.util.Calendar
 import java.util.concurrent.{TimeUnit, Executors}
 
@@ -19,10 +20,28 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
 
   def schedule(): Unit ={
     val reader = Executors.newScheduledThreadPool(1)
+    var start = java.lang.Long.MAX_VALUE
+    var insert:Boolean = true
+    var current:Calendar = null
     val executor = Executors.newFixedThreadPool(Runtime.getRuntime.availableProcessors()+1);
     reader.scheduleAtFixedRate(new Runnable() {
       override def run(): Unit = {
         try {
+          var meta =Utils.getRecordMetaToScan()
+          if(meta.isDefined){
+            start = meta.get.getTime
+            insert = false
+          }
+          else {
+            meta = Utils.getFirstRecord
+            if(meta.isDefined){
+              start = meta.get.getTime
+              insert = true
+            }
+            else {
+              start = java.lang.Long.MAX_VALUE
+            }
+          }
           val dataframe_mysql = sqlc.read.format("jdbc")
             .option("url", "jdbc:mysql://localhost:3306/ax")
             .option("driver", "com.mysql.jdbc.Driver")
@@ -30,11 +49,17 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
             .option("user", "root")
             .option("password", "mysql").load()
           sqlc.udf.register("truncMin", new TruncMinFn())
+          current = Calendar.getInstance()
           val testrdd: RDD[Row] = dataframe_mysql.where("truncMin(InsertedTime)").where("Direction = 'send'").rdd
           val parseFunction = AnomalyDetector.buildCategoricalAndLabelFunction(testrdd,protocols)
           val originalAndData = testrdd.map(line => (line, parseFunction(line)))
           println("Checking anomalies in "+originalAndData.collect().size + " records")
+          println("***********STARTFOUND "+start + " , "+new Timestamp(start) + " , "+Calendar.getInstance().setTimeInMillis(start))
           AnomalyDetector.anomalies(originalAndData,sqlc,detector)
+          if(start != java.lang.Long.MAX_VALUE) {
+            println("updating start")
+            Utils.updateRecordsMetaToScan(new Timestamp(current.getTimeInMillis), insert)
+          }
         }
         catch {
           case e:Throwable => {
@@ -44,25 +69,19 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
           }
         }
       }
-    },0,1,TimeUnit.MINUTES)
+    },0,5,TimeUnit.SECONDS)
 
 
     class TruncMinFn extends Function1[java.sql.Timestamp,Boolean] with Serializable{
-      override def apply(d: java.sql.Timestamp): Boolean= {
+      override def apply(d: java.sql.Timestamp): Boolean = {
         truncMin(d)
       }
     }
 
 
     def truncMin(date:java.sql.Timestamp) = {
-      val c = Calendar.getInstance();
-      c.set(Calendar.SECOND,0)
-      c.set(Calendar.MILLISECOND,0)
-      c.set(Calendar.MINUTE,c.get(Calendar.MINUTE)-2)
-      val start = c.getTime.getTime
-      c.set(Calendar.MINUTE,c.get(Calendar.MINUTE)+1)
-      val end = c.getTime.getTime
-      //println("*** timerange "+start + " ~ "+end)
+      val end = current.getTime.getTime
+      //println("*** timerange "+start + " <=> "+end)
       date.getTime >= start && date.getTime < end
     }
 

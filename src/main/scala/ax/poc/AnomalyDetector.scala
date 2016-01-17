@@ -347,11 +347,9 @@ object AnomalyDetector {
         dataToStore("transfetime") = e.get(18)
         dataToStore("insertedtime") = e.get(36)
         println("\n\n***** ANOMALY => (" + e.get(8) + "," + e.get(17) + "," + e.get(18) + ")")
+        Utils.saveToES(dataToStore,"anomalies")
         Thread.sleep(1000)
       })
-      Utils.saveToES(dataToStore, sc)
-      //Thread.sleep(2000)
-      println("****************************************")
     }
 
   }

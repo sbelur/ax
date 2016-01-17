@@ -70,7 +70,7 @@ object Utils {
   }
 
 
-  def saveToES(anomalies:collection.mutable.Map[String,Any],sc:SparkContext): Unit ={
+  def saveToES(anomalies:collection.mutable.Map[String,Any],indextype:String): Unit ={
 
     val esconnector = client()
     if(anomalies == null || anomalies.isEmpty || !esconnector.isDefined){
@@ -81,7 +81,7 @@ object Utils {
 
     val jmap:java.util.Map[java.lang.String, java.lang.Object] = mapAsJavaMap(anomalies).asInstanceOf[java.util.Map[java.lang.String, java.lang.Object]]
     println(jmap)
-    val resp  = tsclient.prepareIndex("ax","anomalies").setSource(jmap).execute().actionGet()
+    val resp  = tsclient.prepareIndex("ax",indextype).setSource(jmap).execute().actionGet()
     println(resp.isCreated + ","+resp.getId + ","+resp.getIndex+","+resp.getType)
   }
 

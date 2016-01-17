@@ -52,6 +52,7 @@ object Aggregator {
       .option("user", "root")
       .option("password", "mysql").load()
     val rdd: RDD[Row] = dataframe_mysql.filter("Direction = 'send'").rdd
+    rdd.cache()
     val mapped: RDD[((Long, String, Long), Double)] = rdd.map {
       r: Row => {
         val protocol = r.get(8).toString
@@ -64,39 +65,75 @@ object Aggregator {
         cal.setTime(dt)
         cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
-        println(cal.getTimeInMillis + "," + protocol + "," + filesize + "," + transfetime)
+        //println(cal.getTimeInMillis + "," + protocol + "," + filesize + "," + transfetime)
         (cal.getTimeInMillis, protocol, filesize) -> transfetime
       }
     }
 
     val temp: RDD[((Long, String, Long), Iterable[Double])] = mapped.groupByKey()
-    val per: RDD[((Long, String, Long), String)] = temp.map {
+    val per: RDD[((Long, String, Long), Array[Double])] = temp.map {
       e => {
         val key = e._1
         val values: Iterable[Double] = e._2
         val size = values.size
         //val r:RDD[Double] = sc.parallelize(values.toSeq)
-        val indexed:Seq[(Int,Double)] = values.toSeq.sortWith((x:Double,y:Double) => x < y).zipWithIndex.map(x => x.swap)
-        val percentiles:Array[String] = Array(0.5,0.9,0.99).map {
-          percentile  =>
+        val indexed: Seq[(Int, Double)] = values.toSeq.sortWith((x: Double, y: Double) => x < y).zipWithIndex.map(x => x.swap)
+        val percentiles: Array[Double] = Array(0.5, 0.9, 0.99).map {
+          percentile =>
             val id = (size * percentile).asInstanceOf[Long];
-            val d:Option[(Int,Double)] = indexed.find {
+            val d: Option[(Int, Double)] = indexed.find {
               t => t._1 == id
             }
-            if(d.isDefined) {
+            if (d.isDefined) {
               val db: Double = d.get._2
-              db.toString
+              db
             }
             else
-              "notfound"
+              -1D
         }
-        (key, "(" + percentiles.mkString(",") )
+        (key, percentiles)
       }
     }
-    val fis = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(new File("/tmp/per" + UUID.randomUUID()))))
-    per.collect.foreach(x => {fis.write(x._1 + " => " + x._2);fis.write("\n")})
-    fis.flush()
-    fis.close()
+    val dataToStore = collection.mutable.Map[String, Any]()
+    per.foreach {
+      e => {
+        val key = e._1
+        val stats = e._2
+        val insertedtime = key._1
+        val protocol = key._2
+        val fs = key._3
+        val pt50 = stats(0)
+        val pt90 = stats(1)
+        val pt99 = stats(2)
+        dataToStore("insertedtime")  = insertedtime
+        dataToStore("protocol")  = protocol
+        dataToStore("filesize")  = fs
+        dataToStore("percentile50")  = pt50
+        dataToStore("percentile90")  = pt90
+        dataToStore("percentile99")  = pt99
+        Utils.saveToES(dataToStore,"transferstats")
+      }
+    }
+    dataToStore.clear()
+    val topprotocols = rdd.map {
+      r: Row => {
+        val protocol = r.get(8).toString
+        val filesize = r.get(17).toString.toLong
+        protocol->filesize
+      }
+    }
+    val protocolgrp = topprotocols.groupByKey()
+    protocolgrp.foreach {
+      e => {
+        dataToStore("protocol") = e._1
+        dataToStore("totaltransfer") = e._2.sum
+        dataToStore("mintransfer") = e._2.min
+        dataToStore("maxtransfer") = e._2.max
+        Utils.saveToES(dataToStore,"protocolview")
+      }
+    }
+
+    rdd.unpersist()
   }
 
 

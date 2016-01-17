@@ -1,4 +1,4 @@
-package test
+package ax.poc
 
 import java.net.InetSocketAddress
 import java.sql.{Timestamp, DriverManager}

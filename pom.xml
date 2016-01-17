@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project>
-    <groupId>com.oreilly.learningsparkexamples</groupId>
+    <groupId>ax</groupId>
     <artifactId>java</artifactId>
     <modelVersion>4.0.0</modelVersion>
-    <name>examples</name>
+    <name>poc</name>
     <packaging>jar</packaging>
     <version>0.0.2</version>
     <repositories>

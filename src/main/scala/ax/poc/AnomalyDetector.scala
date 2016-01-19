@@ -1,7 +1,9 @@
 package ax.poc
 
 import java.io.{ObjectInputStream, FileInputStream, FileOutputStream, ObjectOutputStream}
+import java.text.SimpleDateFormat
 import java.util
+import java.util.Calendar
 
 import org.apache.commons.math3.stat.descriptive.rank.Percentile
 import org.apache.spark.mllib.clustering.{KMeansModel, KMeans}
@@ -134,7 +136,7 @@ object AnomalyDetector {
       buffer.remove(3)
       var protocol = buffer.remove(0)
 
-      println("************ "+buffer + " row "+r.toString())
+      //println("************ "+buffer + " row "+r.toString())
       val vector = buffer.map(_.toDouble)
       /*x => {
         try {
@@ -182,12 +184,12 @@ object AnomalyDetector {
     val means: Array[Double] = sums.map(_ / n)
     normalized("mean") = means
     normalized("stdev") = stdevs
-    println("got normalized " + normalized)
+    //println("got normalized " + normalized)
     normalizer
   }
 
   def normalizer: (Vector) => Vector = {
-    println("in normalizer " + normalized)
+    //println("in normalizer " + normalized)
     (datum: Vector) => {
       val normalizedArray = (datum.toArray, normalized("mean"), normalized("stdev")).zipped.map(
         (value, mean, stdev) =>
@@ -273,16 +275,16 @@ object AnomalyDetector {
 
 
 
-    clmapping.foreach({
+   /* clmapping.foreach({
       case (x: Int, y: ListBuffer[Double]) => {
         val top10 = y.sortWith((x: Double, y: Double) => x > y).take(10)
         val first10 = y.sortWith((x: Double, y: Double) => x < y).take(10)
 
-        println("***** Points in cluster " + x + " are " + top10 + " and least " + first10 + " with size " + y.size)
-        Thread.sleep(1000)
+        //println("***** Points in cluster " + x + " are " + top10 + " and least " + first10 + " with size " + y.size)
+        //Thread.sleep(1000)
       }
       case y => println(y)
-    })
+    })*/
 
 
     (datum: Vector) => {
@@ -308,11 +310,11 @@ object AnomalyDetector {
       val calcThreshold75 = per.evaluate(doubles, 75)
       val b = centroid > calcThreshold99 && centroid > 0
       //if (b) {
-      val str = datum.toString
+      //val str = datum.toString
       //if(str.contains("0.02") && str.contains("5893") ) {
-      println("condition " + centroid + " , " + calcThreshold99 + " in cluster " + cl + " dataum " + datum)
-      val string: String = util.Arrays.toString(datum.toArray)
-      println("datum..." + datum + " , cluster  " + cl + " , centroid  " + centroid + " ,  string " + string + " , calcThresholds " + calcThreshold100 + " & " + calcThreshold99 + " & " + calcThreshold95 + " & " + calcThreshold90 + " & " + calcThreshold85 + " & " + calcThreshold80 + " & " + calcThreshold75)
+      //println("condition " + centroid + " , " + calcThreshold99 + " in cluster " + cl + " dataum " + datum)
+      //val string: String = util.Arrays.toString(datum.toArray)
+      //println("datum..." + datum + " , cluster  " + cl + " , centroid  " + centroid + " ,  string " + string + " , calcThresholds " + calcThreshold100 + " & " + calcThreshold99 + " & " + calcThreshold95 + " & " + calcThreshold90 + " & " + calcThreshold85 + " & " + calcThreshold80 + " & " + calcThreshold75)
       //}
       //}
       b
@@ -342,10 +344,21 @@ object AnomalyDetector {
       println("************* total found " + allkeys.size)
       val dataToStore = collection.mutable.Map[String, Any]()
       allkeys.foreach(e => {
-        dataToStore("protocol") = e.get(8)
-        dataToStore("filesize") = e.get(17)
-        dataToStore("transfetime") = e.get(18)
-        dataToStore("insertedtime") = e.get(36)
+        dataToStore("transportprotocol") = e.get(8)
+        dataToStore("sizeoffile") = e.get(17)
+        dataToStore("timetotransfer") = e.get(18)
+        val sdf = new SimpleDateFormat("yyy-MM-dd HH:mm:ss")
+        val dt = sdf.parse(e.get(36).toString)
+        val cal = Calendar.getInstance()
+        cal.setTime(dt)
+        cal.set(Calendar.MILLISECOND, 0)
+        val y = cal.get(Calendar.YEAR)
+        val mon = cal.get(Calendar.MONTH) + 1
+        val d = cal.get(Calendar.DATE)
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val min = cal.get(Calendar.MINUTE)
+        val sec = cal.get(Calendar.SECOND)
+        dataToStore("insertedat") = "" + y + "-" + mon + "-" + d + " " + h + ":" + min + ":" + sec
         println("\n\n***** ANOMALY => (" + e.get(8) + "," + e.get(17) + "," + e.get(18) + ")")
         Utils.saveToES(dataToStore,"anomalies")
         Thread.sleep(1000)

@@ -35,8 +35,10 @@ class Scheduler(val sqlc:SQLContext,detector:Vector => Boolean,protocols:Map[Str
           else {
             meta = Utils.getFirstRecord
             if(meta.isDefined){
-              start = meta.get.getTime
-              insert = true
+              if(meta.get != null) { //fixme - wait
+                start = meta.get.getTime
+                insert = true
+              }
             }
             else {
               start = java.lang.Long.MAX_VALUE

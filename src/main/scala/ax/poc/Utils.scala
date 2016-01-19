@@ -80,9 +80,9 @@ object Utils {
 
 
     val jmap:java.util.Map[java.lang.String, java.lang.Object] = mapAsJavaMap(anomalies).asInstanceOf[java.util.Map[java.lang.String, java.lang.Object]]
-    println(jmap)
+    //println(jmap)
     val resp  = tsclient.prepareIndex("ax",indextype).setSource(jmap).execute().actionGet()
-    println(resp.isCreated + ","+resp.getId + ","+resp.getIndex+","+resp.getType)
+    //println(resp.isCreated + ","+resp.getId + ","+resp.getIndex+","+resp.getType)
   }
 
   var esclient:Option[TransportClient] = None

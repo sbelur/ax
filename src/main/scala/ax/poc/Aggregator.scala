@@ -48,7 +48,7 @@ object Aggregator {
     val dataframe_mysql = sqlcontext.read.format("jdbc")
       .option("url", "jdbc:mysql://localhost:3306/ax")
       .option("driver", "com.mysql.jdbc.Driver")
-      .option("dbtable", "VLTransfers")
+      .option("dbtable", "spikecopy")
       .option("user", "root")
       .option("password", "mysql").load()
     val rdd: RDD[Row] = dataframe_mysql.filter("Direction = 'send'").rdd
@@ -63,7 +63,7 @@ object Aggregator {
         val dt = sdf.parse(insertedtime.toString)
         val cal = Calendar.getInstance()
         cal.setTime(dt)
-        cal.set(Calendar.SECOND, 0)
+        //cal.set(Calendar.SECOND, 0)
         cal.set(Calendar.MILLISECOND, 0)
         //println(cal.getTimeInMillis + "," + protocol + "," + filesize + "," + transfetime)
         (cal.getTimeInMillis, protocol, filesize) -> transfetime
@@ -105,13 +105,21 @@ object Aggregator {
         val pt50 = stats(0)
         val pt90 = stats(1)
         val pt99 = stats(2)
-        dataToStore("insertedtime")  = insertedtime
-        dataToStore("protocol")  = protocol
-        dataToStore("filesize")  = fs
-        dataToStore("percentile50")  = pt50
-        dataToStore("percentile90")  = pt90
-        dataToStore("percentile99")  = pt99
-        Utils.saveToES(dataToStore,"transferstats")
+        val cal = Calendar.getInstance()
+        cal.setTimeInMillis(insertedtime)
+        val y = cal.get(Calendar.YEAR)
+        val mon = cal.get(Calendar.MONTH) + 1
+        val d = cal.get(Calendar.DATE)
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val min = cal.get(Calendar.MINUTE)
+        val sec = cal.get(Calendar.SECOND)
+        dataToStore("insertedat") = "" + y + "-" + mon + "-" + d + " " + h + ":" + min + ":" + sec
+        dataToStore("protocol") = protocol
+        dataToStore("filesize") = fs
+        dataToStore("percentile50") = pt50
+        dataToStore("percentile90") = pt90
+        dataToStore("percentile99") = pt99
+        Utils.saveToES(dataToStore, "transferstats")
       }
     }
     dataToStore.clear()
@@ -119,19 +127,76 @@ object Aggregator {
       r: Row => {
         val protocol = r.get(8).toString
         val filesize = r.get(17).toString.toLong
-        protocol->filesize
+        val insertedtime = r.get(36)
+        val sdf = new SimpleDateFormat("yyy-MM-dd HH:mm:ss")
+        val dt = sdf.parse(insertedtime.toString)
+        val cal = Calendar.getInstance()
+        cal.setTime(dt)
+        //cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        (cal.getTimeInMillis, protocol) -> filesize
       }
     }
     val protocolgrp = topprotocols.groupByKey()
     protocolgrp.foreach {
       e => {
-        dataToStore("protocol") = e._1
+        val cal = Calendar.getInstance()
+        val insertedtime = e._1._1
+        cal.setTimeInMillis(insertedtime)
+        val y = cal.get(Calendar.YEAR)
+        val mon = cal.get(Calendar.MONTH) + 1
+        val d = cal.get(Calendar.DATE)
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val min = cal.get(Calendar.MINUTE)
+        val sec = cal.get(Calendar.SECOND)
+        dataToStore("insertedat") = "" + y + "-" + mon + "-" + d + " " + h + ":" + min + ":" + sec
+        dataToStore("protocol") = e._1._2
         dataToStore("totaltransfer") = e._2.sum
         dataToStore("mintransfer") = e._2.min
         dataToStore("maxtransfer") = e._2.max
-        Utils.saveToES(dataToStore,"protocolview")
+        Utils.saveToES(dataToStore, "protocolview")
       }
     }
+
+
+    dataToStore.clear()
+    val topapis = rdd.map {
+      r: Row => {
+        val api = r.get(26).toString
+        val filesize = r.get(17).toString.toLong
+        val insertedtime = r.get(36)
+        val sdf = new SimpleDateFormat("yyy-MM-dd HH:mm:ss")
+        val dt = sdf.parse(insertedtime.toString)
+        val cal = Calendar.getInstance()
+        cal.setTime(dt)
+        //cal.set(Calendar.SECOND, 0)
+        cal.set(Calendar.MILLISECOND, 0)
+        (cal.getTimeInMillis, api) -> filesize
+      }
+    }
+    val topapisgrp = topapis.groupByKey()
+    topapisgrp.foreach {
+      e => {
+        val cal = Calendar.getInstance()
+        val insertedtime = e._1._1
+        cal.setTimeInMillis(insertedtime)
+        val y = cal.get(Calendar.YEAR)
+        val mon = cal.get(Calendar.MONTH) + 1
+        val d = cal.get(Calendar.DATE)
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val min = cal.get(Calendar.MINUTE)
+        val sec = cal.get(Calendar.SECOND)
+        dataToStore("insertedat") = "" + y + "-" + mon + "-" + d + " " + h + ":" + min + ":" + sec
+        dataToStore("api") = e._1._2
+        dataToStore("totaltransfer") = e._2.sum
+        dataToStore("mintransfer") = e._2.min
+        dataToStore("maxtransfer") = e._2.max
+        Utils.saveToES(dataToStore, "apiview")
+      }
+    }
+
+
+
 
     rdd.unpersist()
   }
